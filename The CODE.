@@ -86,3 +86,39 @@ fig.update_layout(
 
 # Convert Plotly figure to HTML div
 plotly_div_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
+import re
+
+# The original html_content from cell 3u9xCJSOEaeQ is available here
+# Remove Chart.js script import
+modified_html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/chart\.js"></script>', '', html_content)
+
+# Remove Chart.js canvas tag
+modified_html = re.sub(r'<canvas id="spreadChart"></canvas>', '', modified_html)
+
+# Remove the entire .controls div (which contains the original HTML sliders)
+modified_html = re.sub(r'<div class="controls">.*?</div>', '', modified_html, flags=re.DOTALL)
+
+# Remove the entire Chart.js JavaScript block using a more robust regex
+# The previous regex had unescaped special characters like ( ) { } causing an error.
+# This regex targets the entire script block that contains a unique Chart.js identifier.
+chartjs_script_regex = r'<script>.*?const chart = new Chart.*?<\/script>'
+modified_html = re.sub(chartjs_script_regex, '', modified_html, flags=re.DOTALL)
+
+# Remove the existing h1 tag from the original html_content before inserting it at the top
+# This line is kept to ensure any existing h1 tag within the original html_content is removed.
+modified_html = re.sub(r'<h1>Cluster Munition Spread Estimator</h1>', '', modified_html)
+
+# Remove the explicit addition of the <h1> tag here.
+# Now, insert only the plotly_div_html at the very beginning of the modified HTML
+modified_html = f'{plotly_div_html}' + modified_html
+
+# The previous line 'modified_html = modified_html.replace("import math", "import math")'
+# was irrelevant to HTML modification and has been removed.
+display(HTML(modified_html))
+file_name = 'cluster_munition_estimator.html'
+with open(file_name, 'w') as f:
+    f.write(modified_html)
+print(f'HTML content saved to {file_name}')
+from Google. colab import files
+
+files.download('cluster_munition_estimator.html')
