@@ -1,134 +1,274 @@
-import plotly.graph_objects as go
 from IPython.display import HTML
 
-def calculate_spread(angle, altitude):
-    radians = (angle / 2) * 3.141592653589793 / 180
-    return 2 * altitude * (0 if radians == 0 else (radians + radians**3/3 + 2*radians**5/15 + 17*radians**7/315 + 62*radians**9/2835)) # Taylor series for tan(x) for small x, otherwise use math.tan
+html_content = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cluster Munition Spread Estimator</title>
 
-# Angle data (5 to 85 degrees)
-angle_data = list(range(5, 86, 1))
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-# Initial altitudes
-current_altitude_init = 2000
-comparison_altitude_init = 3000
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #111;
+        color: #f5f5f5;
+        margin: 0;
+        padding: 20px;
+    }
 
-# Calculate initial spread data
-spread_data_init = [calculate_spread(angle, current_altitude_init) for angle in angle_data]
-comparison_spread_data_init = [calculate_spread(angle, comparison_altitude_init) for angle in angle_data]
+    .container {
+        max-width: 1000px;
+        margin: auto;
+    }
 
-# Calculate initial spread difference
-spread_difference_init = [abs(spread_data_init[i] - comparison_spread_data_init[i]) for i in range(len(angle_data))]
+    h1 {
+        text-align: center;
+    }
 
-# Create Plotly figure
-fig = go.Figure()
+    .controls {
+        margin: 20px 0;
+        padding: 20px;
+        background: #1b1b1b;
+        border-radius: 10px;
+    }
 
-fig.add_trace(go.Scatter(
-    x=angle_data,
-    y=spread_data_init,
-    mode='lines',
-    name=f'Current Estimated Footprint (Altitude: {current_altitude_init}m)',
-    line=dict(color='blue', width=2)
-))
+    label {
+        display: block;
+        margin-bottom: 10px;
+    }
 
-fig.add_trace(go.Scatter(
-    x=angle_data,
-    y=comparison_spread_data_init,
-    mode='lines',
-    name=f'Comparison Footprint (Altitude: {comparison_altitude_init}m)',
-    line=dict(color='red', width=2)
-))
+    input[type=range] {
+        width: 100%;
+    }
 
-fig.add_trace(go.Scatter(
-    x=angle_data,
-    y=spread_difference_init,
-    mode='lines',
-    name='Spread Difference',
-    line=dict(color='green', width=2, dash='dot') # Using a dotted line for difference
-))
+    canvas {
+        background: white;
+        border-radius: 10px;
+        padding: 10px;
+    }
 
-# Define slider steps for current altitude
-current_altitude_slider_steps = []
-for alt in range(500, 10001, 100):
-    current_spread_at_alt = [calculate_spread(angle, alt) for angle in angle_data]
-    # The diff here will be calculated against the *initial* comparison_spread_data_init
-    # due to the static nature of slider args.
-    diff_at_alt = [abs(current_spread_at_alt[i] - comparison_spread_data_init[i]) for i in range(len(angle_data))]
-    current_altitude_slider_steps.append({
-        'method': 'restyle',
-        # Update trace 0 (current) and trace 2 (difference)
-        'args': [{'y': [current_spread_at_alt, diff_at_alt],
-                  'name': [f'Current Estimated Footprint (Altitude: {alt}m)', 'Spread Difference']},
-                 [0, 2]] # Apply to trace 0 and trace 2
-    })
+    .formula {
+        margin-top: 20px;
+        background: #1b1b1b;
+        padding: 15px;
+        border-radius: 10px;
+        line-height: 1.7;
+    }
 
-# Define slider steps for comparison altitude
-comparison_altitude_slider_steps = []
-for alt in range(500, 10001, 100):
-    comparison_spread_at_alt = [calculate_spread(angle, alt) for angle in angle_data]
-    # The diff here will be calculated against the *initial* spread_data_init
-    # due to the static nature of slider args.
-    diff_at_alt = [abs(spread_data_init[i] - comparison_spread_at_alt[i]) for i in range(len(angle_data))]
-    comparison_altitude_slider_steps.append({
-        'method': 'restyle',
-        # Update trace 1 (comparison) and trace 2 (difference)
-        'args': [{'y': [comparison_spread_at_alt, diff_at_alt],
-                  'name': [f'Comparison Footprint (Altitude: {alt}m)', 'Spread Difference']},
-                 [1, 2]] # Apply to trace 1 and trace 2
-    })
+    code {
+        background: #333;
+        padding: 3px 6px;
+        border-radius: 5px;
+    }
+</style>
+</head>
 
-fig.update_layout(
-    title_text='',
-    xaxis_title='Total Dispersion Angle (degrees)',
-    yaxis_title='Estimated Footprint Width (m)',
-    hovermode='x unified',
-    showlegend=True, # Re-enable legend so 'Spread Difference' name is visible
-    sliders=[
-        {
-            'steps': current_altitude_slider_steps,
-            'active': (current_altitude_init - 500) // 100, # Set initial position
-            'pad': {'t': 50},
-            'currentvalue': {'prefix': 'Current Altitude: '},
-            'len': 0.8, 'x': 0.1, 'y': 1.1, 'yanchor': 'bottom' # Moved to top
+<body>
+
+<div class="container">
+
+<h1>Cluster Munition Spread Estimator</h1>
+
+<div class="controls">
+
+    <label>
+        Release Altitude:
+        <span id="altitudeValue">2000</span> meters
+    </label>
+
+    <input type="range" id="altitudeSlider"
+           min="500"
+           max="10000"
+           value="2000"
+           step="100">
+
+    <label style="margin-top: 20px;">
+        Comparison Altitude:
+        <span id="comparisonAltitudeValue">3000</span> meters
+    </label>
+
+    <input type="range" id="comparisonAltitudeSlider"
+           min="500"
+           max="10000"
+           value="3000"
+           step="100">
+
+</div>
+
+<canvas id="spreadChart"></canvas>
+
+<div class="formula">
+    <h3>Model</h3>
+
+    <p>
+        Ground footprint width is estimated using:
+    </p>
+
+    <p>
+        <code>Spread Width = 2 × h × tan(θ / 2)</code>
+    </p>
+
+    <ul>
+        <li><strong>h</strong> = release altitude</li>
+        <li><strong>θ</strong> = total dispersion angle</li>
+    </ul>
+
+    <p>
+        This is an idealized geometric approximation.
+        Real-world spread depends on:
+    </p>
+
+    <ul>
+        <li>wind drift</li>
+        <li>release velocity</li>
+        <li>camera perspective distortion</li>
+        <li>submunition aerodynamics</li>
+    </ul>
+</div>
+
+</div>
+
+<script>
+
+const ctx = document.getElementById('spreadChart').getContext('2d');
+
+// Initial values for the sliders
+let currentAltitude = 2000;
+let comparisonAltitude = 3000;
+
+const angleData = [];
+let spreadData = []; // Data for the slider-controlled altitude
+let spreadDataForComparison = []; // Data for the fixed comparison altitude
+
+function calculateSpread(angle, altitude) {
+
+    const radians = (angle / 2) * Math.PI / 180;
+
+    return 2 * altitude * Math.tan(radians);
+}
+
+function updateChartData() {
+    spreadData = [];
+    spreadDataForComparison = [];
+    for (let angle = 5; angle <= 85; angle += 1) {
+        angleData.push(angle);
+        spreadData.push(calculateSpread(angle, currentAltitude));
+        spreadDataForComparison.push(calculateSpread(angle, comparisonAltitude));
+    }
+}
+
+// Initialize data
+updateChartData();
+
+const chart = new Chart(ctx, {
+
+    type: 'line',
+
+    data: {
+
+        labels: angleData,
+
+        datasets: [
+            {
+                label: `Current Estimated Footprint (Altitude: ${currentAltitude}m)`,
+                data: spreadData,
+                borderColor: 'rgb(75, 192, 192)', // Blue-green for the main line
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderWidth: 2,
+                tension: 0.2
+            },
+            {
+                label: `Comparison Footprint (Altitude: ${comparisonAltitude}m)`,
+                data: spreadDataForComparison,
+                borderColor: 'rgb(255, 99, 132)', // Red for the comparison line
+                backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                borderWidth: 2,
+                tension: 0.2
+            }
+        ]
+    },
+
+    options: {
+
+        responsive: true,
+
+        plugins: {
+
+            legend: {
+                labels: {
+                    color: 'black'
+                }
+            }
         },
-        {
-            'steps': comparison_altitude_slider_steps,
-            'active': (comparison_altitude_init - 500) // 100, # Set initial position
-            'pad': {'t': 50},
-            'currentvalue': {'prefix': 'Comparison Altitude: '},
-            'len': 0.8, 'x': 0.1, 'y': -0.1, 'yanchor': 'top' # Kept at bottom
+
+        scales: {
+
+            x: {
+
+                title: {
+                    display: true,
+                    text: 'Total Dispersion Angle (degrees)',
+                    color: 'black'
+                },
+
+                ticks: {
+                    color: 'black'
+                }
+            },
+
+            y: {
+
+                title: {
+                    display: true,
+                    text: 'Estimated Footprint Width (m)',
+                    color: 'black'
+                },
+
+                ticks: {
+                    color: 'black'
+                }
+            }
         }
-    ]
-)
+    }
+});
 
-# Convert Plotly figure to HTML div
-plotly_div_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-import re
+const altitudeSlider = document.getElementById('altitudeSlider');
+const altitudeValue = document.getElementById('altitudeValue');
+altitudeSlider.addEventListener('input', function() {
+    currentAltitude = parseInt(this.value);
+    altitudeValue.textContent = currentAltitude;
 
-# The original html_content from cell 3u9xCJSOEaeQ is available here
-# Remove Chart.js script import
-modified_html = re.sub(r'<script src="https://cdn\.jsdelivr\.net/npm/chart\.js"></script>', '', html_content)
+    const updatedData = [];
+    for (let angle = 5; angle <= 85; angle += 1) {
+        updatedData.push(calculateSpread(angle, currentAltitude));
+    }
+    chart.data.datasets[0].data = updatedData;
+    chart.data.datasets[0].label = `Current Estimated Footprint (Altitude: ${currentAltitude}m)`;
+    chart.update();
+});
 
-# Remove Chart.js canvas tag
-modified_html = re.sub(r'<canvas id="spreadChart"></canvas>', '', modified_html)
+const comparisonAltitudeSlider = document.getElementById('comparisonAltitudeSlider');
+const comparisonAltitudeValue = document.getElementById('comparisonAltitudeValue');
+comparisonAltitudeSlider.addEventListener('input', function() {
+    comparisonAltitude = parseInt(this.value);
+    comparisonAltitudeValue.textContent = comparisonAltitude;
 
-# Remove the entire .controls div (which contains the original HTML sliders)
-modified_html = re.sub(r'<div class="controls">.*?</div>', '', modified_html, flags=re.DOTALL)
+    const updatedData = [];
+    for (let angle = 5; angle <= 85; angle += 1) {
+        updatedData.push(calculateSpread(angle, comparisonAltitude));
+    }
+    chart.data.datasets[1].data = updatedData;
+    chart.data.datasets[1].label = `Comparison Footprint (Altitude: ${comparisonAltitude}m)`;
+    chart.update();
+});
 
-# Remove the entire Chart.js JavaScript block using a more robust regex
-# The previous regex had unescaped special characters like ( ) { } causing an error.
-# This regex targets the entire script block that contains a unique Chart.js identifier.
-chartjs_script_regex = r'<script>.*?const chart = new Chart.*?<\/script>'
-modified_html = re.sub(chartjs_script_regex, '', modified_html, flags=re.DOTALL)
+</script>
 
-# Remove the existing h1 tag from the original html_content before inserting it at the top
-# This line is kept to ensure any existing h1 tag within the original html_content is removed.
-modified_html = re.sub(r'<h1>Cluster Munition Spread Estimator</h1>', '', modified_html)
+</body>
+</html>
+'''
 
-# Remove the explicit addition of the <h1> tag here.
-# Now, insert only the plotly_div_html at the very beginning of the modified HTML
-modified_html = f'{plotly_div_html}' + modified_html
-
-# The previous line 'modified_html = modified_html.replace("import math", "import math")'
-# was irrelevant to HTML modification and has been removed.
-
-display(HTML(modified_html))
+display(HTML(html_content))
